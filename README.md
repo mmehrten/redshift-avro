@@ -16,7 +16,7 @@ This option uses a Lambda function to deserialize the Avro data and re-serialize
 6. Use the builtin Redshift method json_parse to decode the JSON data as SUPER type
 7. Perform other transformations on the SUPER data as needed
 
-![Avro using a Lambda function](https://github.com/mmehrten/redshift-avro/Avro-Lambda.png)
+![Avro using a Lambda function](https://github.com/mmehrten/redshift-avro/blob/main/Avro-Lambda.png)
 
 ## python-udf
 
@@ -33,7 +33,7 @@ Redshift also supports native Python UDFs. However, Redshift currently only supp
 6. Use the builtin Redshift method json_parse to decode the JSON data as SUPER type
 7. Perform other transformations on the SUPER data as needed
 
-![Avro using a Python UDF](https://github.com/mmehrten/redshift-avro/Avro-Python.png)
+![Avro using a Python UDF](https://github.com/mmehrten/redshift-avro/blob/main/Avro-Python.png)
 
 ## streaming
 
@@ -41,4 +41,4 @@ This option allows you to re-serialize the Avro data as JSON in-flight, and/or p
 
 Code example TBD.
 
-![Streaming Ingest](https://github.com/mmehrten/redshift-avro/Streaming-Ingest.png)
+![Streaming Ingest](https://github.com/mmehrten/redshift-avro/blob/main/Stream-Ingest.png)
