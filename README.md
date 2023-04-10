@@ -26,6 +26,21 @@ Redshift also supports native Python UDFs. However, Redshift currently only supp
     * An example of this UDF function code is included using the [avro python library](https://pypi.org/project/avro/) Python 2.7 port
     * Note that the UDF needs a line added at the end `return decode(text)` when the UDF is registered with Redshift
     * Note that when defining the UDF input arguments (`(text varchar)`) Redshift will assume a 256 byte VARCHAR. You may need to explicitly set the size of the VARCHAR to be larger (e.g. `(text varchar(2500))`) to handle the size of your input payload - this only seems to be true of the input argument, not the return argument
+    ```sql
+      create or replace function fn_py_decode_avro_binary (text varchar(2500))
+      returns varchar IMMUTABLE as $$
+      import json
+      from avro.datafile import DataFileReader
+      from avro.io import DatumReader
+      import io
+
+
+      def decode(text):
+         return json.dumps(list(DataFileReader(io.BytesIO(text.decode("hex")), DatumReader())))
+         
+      return decode(text)
+      $$ language plpythonu;
+      ```
 2. Perform the streaming data ingest as outlined in [this blog post](https://aws.amazon.com/blogs/big-data/real-time-analytics-with-amazon-redshift-streaming-ingestion/), loading the Kinesis or Kafka Avro data into Redshift in VARBINARY format
 3. Select the binary data out of the materialized view
 4. Encode it as a hexadecimal string to allow it to be sent to your Python UDF function (since Redshift doesn't support VARBINARY data with UDFs)
