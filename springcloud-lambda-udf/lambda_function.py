@@ -1,17 +1,13 @@
-import json
-from avro.datafile import DataFileReader
-from avro.io import DatumReader
 import io
-import avro.schema
-from typing import Dict, List
+import json
 import struct
-import json
+from typing import Dict, List
+
+import aggregated_record_pb2
+import avro.schema
+import requests
 from avro.datafile import DataFileReader
 from avro.io import DatumReader
-import io
-import avro.schema
-import aggregated_record_pb2
-import requests
 
 # TODO: Determine the real registry URL
 REGISTRY_URL = "http://.../"
@@ -265,7 +261,7 @@ def test_basic_message_decode():
         byte_io = io.BytesIO(byte_data)
         decoder = avro.io.BinaryDecoder(byte_io)
         reader = avro.io.DatumReader(schema)
-        result = reader.read(decoder)
+        reader.read(decoder)
         print("Need schema in Lambda")
     except Exception as e:
         print(f"Failed to read with Schema: {e}")
@@ -273,7 +269,7 @@ def test_basic_message_decode():
     try:
         byte_io = io.BytesIO(byte_data)
         decoder = DataFileReader(byte_io, DatumReader())
-        result = list(decoder)
+        list(decoder)
         print("Schema is with payload")
     except Exception as e:
         print(f"Failed to read as file: {e}")

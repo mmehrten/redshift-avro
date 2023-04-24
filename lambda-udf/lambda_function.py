@@ -1,7 +1,8 @@
+import io
 import json
+
 from avro.datafile import DataFileReader
 from avro.io import DatumReader
-import io
 
 
 def lambda_handler(event, context):

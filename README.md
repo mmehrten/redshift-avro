@@ -29,10 +29,11 @@ Redshift also supports native Python UDFs. However, Redshift currently only supp
     ```sql
       create or replace function fn_py_decode_avro_binary (text varchar(2500))
       returns varchar IMMUTABLE as $$
+      import io
       import json
+
       from avro.datafile import DataFileReader
       from avro.io import DatumReader
-      import io
 
 
       def decode(text):
