@@ -9,8 +9,10 @@ import requests
 from avro.datafile import DataFileReader
 from avro.io import DatumReader
 
-# TODO: Determine the real registry URL
-REGISTRY_URL = "http://.../"
+HOST = os.environ["SCHEMA_REGISTRY_HOST"]
+REGISTRY_URL_FORMAT = (
+    "https://{host}/services/avro-schema-registry/{schema}/{format}/{version}"
+)
 
 
 class SpringSchemaRegistry:
@@ -19,32 +21,41 @@ class SpringSchemaRegistry:
     Currently unimplemented. Need to understand the REST API structure for the registry,
     and how to use the registry responses with the Avro schema library."""
 
-    def __init__(self, url: str):
-        self._url = url
+    def __init__(self):
+        self._url = REGISTRY_URL_FORMAT
         self._schemas: Dict[str, avro.schema.Schema] = {}
+
+    def _get_registry_url(self, schema_id: str) -> str:
+        _, _, schema_id = schema_id.partition("/")
+        _, schema, version = schema_id.split(".")
+        version, _, fmt = version.partition("+")
+        return self._url.format(
+            host=HOST,
+            schema=schema,
+            format=fmt,
+            version=version,
+        )
 
     def _get_registry_response(self, schema_id: str) -> str:
         """Make a request for a schema to the schema registry.
-
-        TODO: Implement
 
         :param schema_id: The schema to request
         :returns: The registry response text
         :raises: An HTTPError if a 4xx or 5xx status code is returned
         """
-        resp = requests.get(self._url, json={"schema_id": schema_id})
+        url = self._get_registry_url(schema_id)
+        resp = requests.get(url)
         resp.raise_for_status()
         return resp.text
 
     def _parse_registry_response(self, response: str) -> avro.schema.Schema:
         """Parse the schema registry response into an Avro schema.
 
-        TODO: Implement
-
         :param response: The registry response
         :returns: The Avro schema object
         """
-        return avro.schema.parse(response)
+        resp_dct = json.loads(response)
+        return avro.schema.parse(resp_dct["definition"])
 
     def get(self, schema_id: str) -> avro.schema.Schema:
         """Get an Avro schema from the registry by ID, caching and reusing the response.
@@ -148,18 +159,7 @@ class LambdaHandler:
     """A class demonstrating various ways to handle Avro encoded data."""
 
     def __init__(self):
-        self._registry = SpringSchemaRegistry(REGISTRY_URL)
-        demo_schema = {
-            "namespace": "example.avro",
-            "type": "record",
-            "name": "User",
-            "fields": [
-                {"name": "name", "type": "string"},
-                {"name": "favorite_number", "type": ["int", "null"]},
-                {"name": "favorite_color", "type": ["string", "null"]},
-            ],
-        }
-        self._demo_schema_avro = avro.schema.parse(json.dumps(demo_schema))
+        self._registry = SpringSchemaRegistry()
 
     @staticmethod
     def decode_avro(data: io.BytesIO, schema: avro.schema.Schema) -> Dict:
@@ -168,19 +168,13 @@ class LambdaHandler:
         reader = avro.io.DatumReader(schema)
         return reader.read(decoder)
 
-    @staticmethod
-    def decode_file(data: io.BytesIO) -> List[Dict]:
-        """Decode an Avro file encoded datum which includes the schema in the file."""
-        decoder = DataFileReader(data, DatumReader())
-        return list(decoder)
-
     def decode_spring_kpl_encoded_data(self, payload: io.BytesIO) -> List[Dict]:
         """Decode Spring-Cloud encoded data, which has used KPL consumer aggregation."""
         records = []
         for sub_payload in KPLClient.decode(payload):
             headers = SpringEmbeddedMessageUtils.get_message_headers(sub_payload)
             body = io.BytesIO(sub_payload.read())
-            schema_id = headers["schema_id"]
+            schema_id = headers["contentType"]
             schema = self._registry.get(schema_id)
             record = self.decode_avro(body, schema)
             records.append(record)
@@ -211,28 +205,6 @@ class LambdaHandler:
                 "error_msg": f"Error processing Lambda event. Error: {error}",
             }
         )
-
-    def file_handler(self, event, context):
-        try:
-            results = []
-            for record in event["arguments"]:
-                data_bytes = self._decode_redshift_payload(record[0])
-                results.append(json.dumps(self.decode_file(data_bytes)))
-            return self._redshift_success(results, event["num_records"])
-        except Exception as e:
-            return self._redshift_failure(e)
-
-    def demo_handler(self, event, context):
-        try:
-            results = []
-            for record in event["arguments"]:
-                data_bytes = self._decode_redshift_payload(record[0])
-                results.append(
-                    json.dumps(self.decode_avro(data_bytes, self._demo_schema_avro))
-                )
-            return self._redshift_success(results, event["num_records"])
-        except Exception as e:
-            return self._redshift_failure(e)
 
     def springboot_handler(self, event, context):
         try:
@@ -285,3 +257,35 @@ def test_get_message_headers():
         "baz": "quxx",
     }
     assert payload.read().decode("utf-8") == "Hello"
+
+
+def test_get_registry_url():
+    assert (
+        SpringSchemaRegistry()._get_registry_url("application/vnd.person.v1+avro")
+        == "https://app.dev01.ppmi.ts.aws.frb.pvt/services/avro-schema-registry/person/avro/v1"
+    )
+
+
+def test_payload_decode():
+    with open("kinesis_sample_message.bin", "rb") as f:
+        data = f.read()
+
+    handler = LambdaHandler()
+    decoded = KPLClient.decode(io.BytesIO(data))
+    assert len(decoded) == 1
+    sub_payload = decoded[0]
+
+    headers = SpringEmbeddedMessageUtils.get_message_headers(sub_payload)
+    assert headers == {"contentType": "application/vnd.person.v1+avro"}
+
+    body = io.BytesIO(sub_payload.read())
+    schema_id = headers["contentType"]
+    schema = handler._registry.get(schema_id)
+    assert schema is not None
+
+    record = handler.decode_avro(body, schema)
+    assert record == {"my_message_key": "my_message_value"}
+
+    assert handler.decode_spring_kpl_encoded_data(io.BytesIO(data)) == [
+        {"my_message_key": "my_message_value"}
+    ]
