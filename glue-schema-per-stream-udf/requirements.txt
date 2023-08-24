@@ -1,3 +1,2 @@
 avro==1.11.1
-requests==2.28.2
 boto3
